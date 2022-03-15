@@ -44,8 +44,6 @@ class FileViewer(Frame):
         resultFrame = Frame(self.resultWin)
         resultFrame.pack(side=TOP)
         self.outputList = Canvas(resultFrame)
-        # resultsControl = Frame(resultFrame)
-        # resultsControl.pack(side=BOTTOM)
 
         #Create Result File List frame
         self.resultListFrame = Frame(resultFrame)
@@ -82,15 +80,13 @@ class FileViewer(Frame):
             sca = statistics.mean(spectral_centroids[0])
             bandwidth = librosa.feature.spectral_bandwidth(x, sr=sr).tolist()
             bwa = statistics.mean(bandwidth[0])
-            #chromagram = librosa.feature.chroma_stft(x, sr=sr).tolist()
-            #cgstdev = statistics.stdev(chromagram[0])
-            print("Model, ", fileListP[i], zcstdev, sca, bwa)
+            # print("Model, ", fileListP[i], zcstdev, sca, bwa)
             if "audio/music/" in fileListP[i]:
                 self.processedAudioData.append((zcstdev, sca, bwa))
-                self.processedGroundTruths.append("MUSIC")
+                self.processedGroundTruths.append("Music")
             else:
                 self.processedAudioData.append((zcstdev, sca, bwa))
-                self.processedGroundTruths.append("SPEECH")
+                self.processedGroundTruths.append("Speech")
 
     def comp_audio(self):
         if round((len(self.speechFiles) + len(self.musicFiles)) * (2 / 3) - self.modelBooleansCounter()) != 0:
@@ -99,14 +95,11 @@ class FileViewer(Frame):
         self.processedGroundTruths.clear()        
         self.comp_audio_helper(self.speechFiles, 0)
         self.comp_audio_helper(self.musicFiles, len(self.speechFiles))
-        print(self.processedAudioData[23])
+        # print(self.processedAudioData[23])
         self.comp_model()
         self.build_results()
 
-        #print(self.processedAudioData)
-
     def comp_model(self):
-        #clf.fit(self.processedAudioData[:,1,2,3], self.processedAudioData[:,4])
         self.clf.fit(self.processedAudioData, self.processedGroundTruths)
                 
     def results_helper(self, fileListP, startValue, colStartVal):
@@ -146,8 +139,6 @@ class FileViewer(Frame):
                 sca = statistics.mean(spectral_centroids[0])
                 bandwidth = librosa.feature.spectral_bandwidth(x, sr=sr).tolist()
                 bwa = statistics.mean(bandwidth[0])
-                #chromagram = librosa.feature.chroma_stft(x, sr=sr).tolist()
-                #cgstdev = statistics.stdev(chromagram[0])
                 prediction = self.clf.predict([(zcstdev, sca, bwa)]).reshape(1, -1)
                 lb2 = Label(self.resultList, bg='light yellow', text="Prediction: " + str(prediction[0][0]))
                 lb2.pack(side=LEFT, expand=YES)
@@ -277,8 +268,6 @@ class FileViewer(Frame):
         for infile in sorted(glob.glob('audio/speech/*.wav'), key=self.fileSort):
             file, ext = os.path.split(infile)
             self.speechFiles.append('audio/speech/' + ext)
-        # print(self.musicFiles)
-        # print(self.speechFiles)
         self.build_filelist()
         return
 
