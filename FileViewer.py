@@ -5,11 +5,12 @@
 
 from tkinter import *
 import glob, math, os, re, sys, subprocess, statistics
-from tkinter.scrolledtext import ScrolledText
-from tkinter import filedialog
 from typing import IO
 import librosa
-
+import sklearn
+from sklearn.ensemble import RandomForestClassifier
+import warnings
+warnings.filterwarnings("ignore")
 
 class FileViewer(Frame):
 
@@ -19,11 +20,13 @@ class FileViewer(Frame):
         self.speechFiles = [] 
         self.musicFiles = []
         self.processedAudioData = []
+        self.processedGroundTruths = []
         self.resultWin = resultWin
         self.nums = re.compile(r'(\d+)')
         self.modelBooleans = []
         self.xmax = 150
         self.ymax = 30
+        self.clf = RandomForestClassifier(random_state=0)
 
         #Create main frame
         mainFrame = Frame(master)
@@ -73,22 +76,38 @@ class FileViewer(Frame):
             if self.modelBooleans[i+startValue].get() == 0:
                 continue
             x, sr = librosa.load(fileListP[i])
-            zero_crossings = librosa.zero_crossings(x)
-            spectral_centroids = librosa.feature.spectral_centroid(x, sr=sr)
-            chromagram = librosa.feature.chroma_stft(x, sr=sr)
+            zero_crossing = librosa.feature.zero_crossing_rate(x).tolist()
+            zcstdev = statistics.stdev(zero_crossing[0])
+            spectral_centroids = librosa.feature.spectral_centroid(x, sr=sr).tolist()
+            sca = statistics.mean(spectral_centroids[0])
+            bandwidth = librosa.feature.spectral_bandwidth(x, sr=sr).tolist()
+            bwa = statistics.mean(bandwidth[0])
+            #chromagram = librosa.feature.chroma_stft(x, sr=sr).tolist()
+            #cgstdev = statistics.stdev(chromagram[0])
+            print("Model, ", fileListP[i], zcstdev, sca, bwa)
             if "audio/music/" in fileListP[i]:
-                self.processedAudioData.append((fileListP[i], zero_crossings, spectral_centroids, chromagram, "yes"))
+                self.processedAudioData.append((zcstdev, sca, bwa))
+                self.processedGroundTruths.append("MUSIC")
             else:
-                self.processedAudioData.append((fileListP[i], zero_crossings, spectral_centroids, chromagram, "no"))
+                self.processedAudioData.append((zcstdev, sca, bwa))
+                self.processedGroundTruths.append("SPEECH")
 
     def comp_audio(self):
         if round((len(self.speechFiles) + len(self.musicFiles)) * (2 / 3) - self.modelBooleansCounter()) != 0:
             return
         self.processedAudioData.clear()
+        self.processedGroundTruths.clear()        
         self.comp_audio_helper(self.speechFiles, 0)
         self.comp_audio_helper(self.musicFiles, len(self.speechFiles))
+        print(self.processedAudioData[23])
+        self.comp_model()
         self.build_results()
+
         #print(self.processedAudioData)
+
+    def comp_model(self):
+        #clf.fit(self.processedAudioData[:,1,2,3], self.processedAudioData[:,4])
+        self.clf.fit(self.processedAudioData, self.processedGroundTruths)
                 
     def results_helper(self, fileListP, startValue, colStartVal):
         fileListStr = ""
@@ -99,7 +118,6 @@ class FileViewer(Frame):
         counter = 0
         for i in range(len(fileListP)):
             if self.modelBooleans[i+startValue].get() == 0:
-                print("creating button")
                 link = Button(self.resultList, bg = "light green", text='Play')
                 handler=lambda f=fileListP[i]: self.play_file(f)
                 link.configure(command=handler)
@@ -120,7 +138,18 @@ class FileViewer(Frame):
                     window=lb1, 
                     width=self.xmax, 
                     height=self.ymax)
-                lb2 = Label(self.resultList, bg='light yellow', text="Prediction: ")
+                #Calculate each feature 
+                x, sr = librosa.load(fileListP[i])
+                zero_crossing = librosa.feature.zero_crossing_rate(x).tolist()
+                zcstdev = statistics.stdev(zero_crossing[0])
+                spectral_centroids = librosa.feature.spectral_centroid(x, sr=sr).tolist()
+                sca = statistics.mean(spectral_centroids[0])
+                bandwidth = librosa.feature.spectral_bandwidth(x, sr=sr).tolist()
+                bwa = statistics.mean(bandwidth[0])
+                #chromagram = librosa.feature.chroma_stft(x, sr=sr).tolist()
+                #cgstdev = statistics.stdev(chromagram[0])
+                prediction = self.clf.predict([(zcstdev, sca, bwa)]).reshape(1, -1)
+                lb2 = Label(self.resultList, bg='light yellow', text="Prediction: " + str(prediction[0][0]))
                 lb2.pack(side=LEFT, expand=YES)
                 self.resultList.create_window(
                     150,
@@ -158,12 +187,10 @@ class FileViewer(Frame):
         for i in range(len(self.speechFiles)):
             if self.modelBooleans[i].get() == 0:
                 unselected_speech_files += 1
-        print("unselected speech: ", unselected_speech_files)
         self.results_helper(self.speechFiles, 0, 0)
         self.results_helper(self.musicFiles, len(self.speechFiles), unselected_speech_files)
 
     def play_file(self, file):
-        print(file)
         if sys.platform == "win32":
             if music_file:
                 os.startfile("\\file\\")
@@ -250,8 +277,8 @@ class FileViewer(Frame):
         for infile in sorted(glob.glob('audio/speech/*.wav'), key=self.fileSort):
             file, ext = os.path.split(infile)
             self.speechFiles.append('audio/speech/' + ext)
-        print(self.musicFiles)
-        print(self.speechFiles)
+        # print(self.musicFiles)
+        # print(self.speechFiles)
         self.build_filelist()
         return
 
